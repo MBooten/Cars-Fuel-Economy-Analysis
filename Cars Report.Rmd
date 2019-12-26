@@ -1,0 +1,139 @@
+---
+title: "Cars_mpg_report"
+author: "Matthias Booten"
+date: "26-12-2019"
+output: html_document
+---
+
+```{r intro, echo=FALSE, message=FALSE, warning=FALSE}
+
+#Importing the file and cleaning it
+                           
+library(readr)
+mydf <- read_delim("C:\\Users\\matth\\Desktop\\Data Analyst\\R\\PrepMaterial\\auto_mpg.csv", ";", 
+                       escape_double = FALSE, trim_ws = TRUE) #telling R to read CSV files for file upload 
+#bView(mydf) # importing CSV file into R environment and naming it "mydf"
+
+#Deleting rows with missing values
+
+library(tidyr)              # calling a package to use drop_na function
+
+mydf<-drop_na(mydf)  
+
+#Deleting a select column from the dataset
+
+library(dplyr)                   # calling a package to use the function to drop select columns
+
+mydf = select(mydf, -orogin)     # removing the "orogin" column from mydf
+
+```
+
+## Insights gained from performing statistics on the cars dataset
+
+This files includes the general business insights derived from the auto mpg dataset. The goal is gaining insights in terms of fuel economy. We can conclude that the most efficient
+quartile of cars start at a fuel economy of 29mpg while average fuel economy remains at 23.45 mpg.
+
+```{r mpg Business Questions, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+### Business Questions ###
+
+#What is the 75th percentile of mpg metric for available cars?
+summary(mydf$mpg)   # The 75th percentile of cars by mpg are between 29 and 46
+
+
+
+# What are the car names that match the 75th percentile of cars by mpg?
+good_cars<-subset(mydf, mydf$mpg>=29)  # Creating a new data frame with cars that have mpg of 29 or higher 
+
+# What cars within the 75th percentile of cars by mpg are built in 1975 or later?
+new_cars<-subset(good_cars, good_cars$model_year>=75)   # Creating a new object to see what cars are made in 1975 or lower
+
+# How did the vehicle fuel consumption improve between 1970 and 1982 by 4-year increments?
+
+# Using a for loop to create 3 groups by model_year (70-73, 74-77, 78-81)
+for(i in 1:nrow(mydf)){
+  if(mydf$model_year[i]>=70 & mydf$model_year[i]<=73){mydf$model_year_group[i]<-'group #1'}
+  else if(mydf$model_year[i]>=74 & mydf$model_year[i]<=77){mydf$model_year_group[i]<-'group #2'}
+  else if(mydf$model_year[i]>=78 & mydf$model_year[i]<=81){mydf$model_year_group[i]<- 'group #3'}
+  else if(mydf$model_year[i]==82){mydf$model_year_group[i]<- 'group #4'}
+}
+
+```
+
+The next part of this R report looks into the relation between fuel efficiency and multiple characteristical parameters of our vehicles. With the success being defined as a car belonging to the vehicles with an mpg of 30 or higher, the logistic regression proved that: 
+
+ with every increase of cylinders by 1 unit, the probability of success decrease by 5.56%
+ with every increase of horsepower by 1 unit, the probability of success decrease by 10.24%
+ with every increase of weight by 1 unit, the probability of success decrease by 0.09%
+ with every increase of acceleration by 1 unit, the probability of success decrease by   23.48%
+
+```{r mpg Business Questions2,echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+####################################################################???
+#Now we want to find out about the fuel consumption <30MPG is success
+
+#Build a logistic regression for mpg
+#Create a column "good_bad" that represents success with 1 being success and 0 = failure
+
+for(i in 1:nrow(mydf)){
+  if (mydf$mpg[i]>=30){mydf$good_bad[i]<-"1"}
+  else{mydf$good_bad[i]<-"0"}
+}
+
+#converting the good_bad column back to nummeric for further use
+mydf$good_bad <- as.numeric(mydf$good_bad)
+
+
+#Make a logistic regression to see the related factors
+
+mpg_influence<-glm(good_bad ~ cylinders+horsepower+weight+acceleration, data=mydf, family="binomial")
+summary(mpg_influence)
+
+```
+Following decision tree helps in identifying vehicles having a fuel economy of 30 mpg or higher.
+
+In the dataset, 302 cars travel up to 29 miles per gallown, and 90 cars travel 30 or more miles per gallon.
+
+For instance: From the cars that have 76 bhp or less, 71 travel 30 miles or more per gallon.
+
+The graph below shows us the true false prediction accuracy of the  logistic regression  (red) VS the decision tree (black). We can see that the logistic regression has a bigger surface area under the curve. This indicates that the logistic regression is the most reliable to base business decisions on.
+
+
+```{r mpg Business Questions3, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+library(rpart)
+library(rpart.plot)
+tree_mydf<-rpart(good_bad~cylinders+horsepower+weight+acceleration, data=mydf, method="class")
+rpart.plot(tree_mydf, extra=1, type=1)   
+
+tree_pred<-predict(tree_mydf, mydf, type="prob")              #prediction model for tree
+logit_pred<-predict(mpg_influence, mydf, type="response")     #prediction model for the logistic regression
+
+library(ROCR)
+pred_val_tree<-prediction(tree_pred[,2], mydf$good_bad)
+pred_val_logit<-prediction(logit_pred, mydf$good_bad)
+
+perf_tree<-performance(pred_val_tree, "tpr", "fpr")
+perf_logit<-performance(pred_val_logit, "tpr", "fpr")
+plot(perf_tree, col="black")
+plot(perf_logit, col='red', add=TRUE)
+
+
+```
+
+## Including Plots
+
+Creates plots with 4 groups with years between 1970-1973,1974-1977,1978-1981 and 1982 respectively. We can see that over the years mpg increased.
+
+The overview of car groups 1 through 4 are plotted
+
+```{r plotting, echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+library(ggplot2)    # Importing ggplot2 package to visualize the data
+
+group_mpg_plot<-ggplot(mydf, aes(mydf$model_year_group, mydf$mpg)) #plotting the relationship between group number and mpg
+group_mpg_plot + geom_point(shape=3)
+group_mpg_plot + geom_point(aes(colour=model_year_group)) #adding color to separate groups
+
+```
+
+
